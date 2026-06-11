@@ -119,6 +119,22 @@ Hermes has two entry points: start the terminal UI with `hermes`, or run the gat
 | Interrupt current work         | `Ctrl+C` or send a new message                | `/stop` or send a new message                                                    |
 | Platform-specific status       | `/platforms`                                  | `/status`, `/sethome`                                                            |
 
+### Message source and unauthorized behavior
+
+Gateway authorization is checked before a message reaches the agent. The only exceptions are trusted system paths or platform adapters that enforce their own policy before handing the message to the gateway.
+
+| Message source | Authorization path | Unauthorized behavior |
+| -------------- | ------------------ | --------------------- |
+| Internal gateway events, such as background-process completion notices | Marked internal by the gateway and skipped past user allowlists | Not treated as user messages |
+| Home Assistant events | Trusted by the configured Home Assistant token | Accepted |
+| Webhook events | Authenticated by the webhook adapter, including signature validation where configured | Accepted after adapter validation |
+| Platform adapters with their own access policy, such as WeCom, Weixin, Yuanbao, QQBot, and WhatsApp | Adapter evaluates `dm_policy`, `group_policy`, `allow_from`, or `group_allow_from` before dispatch | If the adapter drops it, the gateway never sees it. If it reaches the gateway and no env allowlist is configured, the adapter decision is honored |
+| Direct messages from an unknown user, with no allowlist configured | DM pairing flow | Sends a rate-limited pairing code by default |
+| Direct messages from an unknown user, with `*_ALLOWED_USERS`, group allowlists, or `GATEWAY_ALLOWED_USERS` configured | Gateway allowlist check | Silently ignored by default, unless `unauthorized_dm_behavior` is explicitly set to `pair` |
+| Group, forum, or channel messages from unauthorized users | Sender allowlist, chat allowlist where supported, pairing approvals, or allow-all flag | Silently ignored. Pairing codes are not posted into groups |
+| Userless messages, such as Telegram anonymous admin posts, service messages, or channel broadcasts | Chat-scoped allowlists such as `TELEGRAM_GROUP_ALLOWED_CHATS` run before the no-user-id deny path | Accepted only when the chat is allowlisted, otherwise ignored |
+| Messages arriving while a session is already busy | Same authorization gate as a cold message | Unauthorized messages are dropped before they can interrupt, queue, or replace pending work |
+
 For the full command lists, see the [CLI guide](https://hermes-agent.nousresearch.com/docs/user-guide/cli) and the [Messaging Gateway guide](https://hermes-agent.nousresearch.com/docs/user-guide/messaging).
 
 ---
